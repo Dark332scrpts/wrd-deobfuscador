@@ -2,7 +2,7 @@ import subprocess
 import tempfile
 import os
 import re
-import glob
+import sys
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -10,29 +10,27 @@ app = Flask(__name__)
 CORS(app)
 
 # ============================================================
-# CONFIGURAÇÃO — caminho do Lua 5.1 no Render
+# Tenta importar lupa (Lua 5.1 embutido no Python)
 # ============================================================
-LUA_BIN = "./lua5.1"  # Vamos compilar junto
+try:
+    import lupa
+    from lupa import LuaRuntime
+    lua = LuaRuntime(unpack_returned_tuples=True)
+    USING_LUPA = True
+    print("✅ Usando lupa (Lua 5.1 embutido)")
+except ImportError:
+    USING_LUPA = False
+    print("⚠️ lupa não disponível, usando Lua externo")
 
 # ============================================================
-# AMBIENTE FAKE LUA (mock)
+# AMBIENTE FAKE LUA (executado dentro do runtime)
 # ============================================================
-MOCK_ENV = r"""
-local _real_print = print
-local _real_type = type
+MOCK_ENV_SETUP = """
 local _captured = {}
 
 local function escape_str(s)
-    return '"' .. s:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"'
-end
-
-print = function(...)
-    local args = {...}
-    local parts = {}
-    for i, v in ipairs(args) do
-        table.insert(parts, tostring(v))
-    end
-    table.insert(_captured, table.concat(parts, "\t"))
+    if s == nil then return "nil" end
+    return '"' .. tostring(s):gsub('\\\\', '\\\\\\\\'):gsub('"', '\\\\"'):gsub('\\n', '\\\\n') .. '"'
 end
 
 local function create_dummy(name)
@@ -47,67 +45,190 @@ local function create_dummy(name)
             local argstr = ""
             for i, v in ipairs(a) do
                 if i > 1 then argstr = argstr .. ", " end
-                argstr = argstr .. tostring(v)
+                local vtype = type(v)
+                if vtype == "string" then
+                    argstr = argstr .. '"' .. tostring(v):sub(1, 100) .. '"'
+                elseif vtype == "function" then
+                    argstr = argstr .. "function"
+                elseif vtype == "table" then
+                    argstr = argstr .. "table"
+                elseif vtype == "nil" then
+                    argstr = argstr .. "nil"
+                else
+                    argstr = argstr .. tostring(v)
+                end
             end
             table.insert(_captured, "CALL: " .. name .. "(" .. argstr .. ")")
+            
+            -- Intercepta HttpGet pra capturar URLs
+            if name == "game.HttpGet" or name == "game.HttpGetAsync" then
+                local url = a[2] or (a[1] and type(a[1]) == "string" and a[1]) or ""
+                table.insert(_captured, "URL_DETECTED: " .. tostring(url))
+            end
+            
             return create_dummy(name .. "_result")
         end,
         __tostring = function() return name end,
         __newindex = function(_, k, v)
-            table.insert(_captured, "SET: " .. name .. "." .. tostring(k) .. " = " .. tostring(v))
-        end
+            if type(v) == "string" and #v > 5 then
+                table.insert(_captured, "SET: " .. name .. "." .. tostring(k) .. " = \"" .. tostring(v):sub(1, 200) .. "\"")
+            else
+                table.insert(_captured, "SET: " .. name .. "." .. tostring(k) .. " = " .. tostring(v))
+            end
+            rawset(d, k, v)
+        end,
+        __len = function() return 1 end,
+        __add = function(a, b) return create_dummy("add") end,
+        __sub = function(a, b) return create_dummy("sub") end,
+        __mul = function(a, b) return create_dummy("mul") end,
+        __div = function(a, b) return create_dummy("div") end,
+        __eq = function(a, b) return false end,
+        __lt = function(a, b) return false end,
+        __le = function(a, b) return false end,
     }
     setmetatable(d, mt)
     return d
 end
 
+-- Mock do game
+local game_mock = create_dummy("game")
+game_mock.HttpGet = function(self, url)
+    table.insert(_captured, "URL_DETECTED: " .. tostring(url))
+    return ""
+end
+game_mock.HttpGetAsync = game_mock.HttpGet
+game_mock.GetService = function(self, svc)
+    return create_dummy("Service." .. tostring(svc))
+end
+game_mock.IsLoaded = function() return true end
+game_mock.PlaceId = 123456
+game_mock.GameId = 123456
+
+-- Mock do workspace
+local workspace_mock = create_dummy("workspace")
+
+-- MockEnv
 local MockEnv = {}
 setmetatable(MockEnv, {
     __index = function(t, k)
-        if _G[k] then return _G[k] end
-        return create_dummy(tostring(k))
+        local kstr = tostring(k)
+        if kstr == "game" then return game_mock end
+        if kstr == "workspace" then return workspace_mock end
+        if kstr == "shared" then return MockEnv end
+        if _G[k] ~= nil then return _G[k] end
+        return create_dummy(kstr)
     end,
     __newindex = function(t, k, v)
         rawset(t, k, v)
     end
 })
 
-_G.game = create_dummy("game")
-_G.workspace = create_dummy("workspace")
-_G.shared = MockEnv
-_G.getfenv = function() return MockEnv end
-_G.getgenv = function() return MockEnv end
-_G.loadstring = function(s)
-    table.insert(_captured, "LOADSTRING: " .. tostring(#s) .. " bytes")
-    if type(s) == "string" and #s > 10 then
-        table.insert(_captured, "LS_CONTENT: " .. s:sub(1, 2000))
+-- Funções globais mockadas
+MockEnv.game = game_mock
+MockEnv.workspace = workspace_mock
+MockEnv.shared = MockEnv
+MockEnv.getfenv = function() return MockEnv end
+MockEnv.getgenv = function() return MockEnv end
+MockEnv.getrenv = function() return MockEnv end
+MockEnv.getreg = function() return MockEnv end
+MockEnv.loadstring = function(s, name)
+    if type(s) == "string" then
+        table.insert(_captured, "LOADSTRING: " .. tostring(#s) .. " bytes")
+        if #s > 10 then
+            table.insert(_captured, "LS_CONTENT_START")
+            table.insert(_captured, tostring(s):sub(1, 5000))
+            table.insert(_captured, "LS_CONTENT_END")
+        end
     end
     return function() end
 end
-_G.load = _G.loadstring
-_G.newproxy = function(b) return newproxy(b) end
-_G.task = create_dummy("task")
-_G.task.wait = function() return 0.1 end
-_G.wait = function() return 0.1 end
-_G.spawn = function(f) pcall(f) end
-_G.Delay = function(_, f) pcall(f) end
+MockEnv.load = MockEnv.loadstring
+MockEnv.task = create_dummy("task")
+MockEnv.task.wait = function(s) return 0.1 end
+MockEnv.task.spawn = function(f, ...) 
+    local ok, err = pcall(f, ...)
+    if not ok then table.insert(_captured, "SPAWN_ERROR: " .. tostring(err)) end
+end
+MockEnv.wait = function(s) return 0.1 end
+MockEnv.spawn = MockEnv.task.spawn
+MockEnv.Delay = function(t, f) pcall(f) end
+MockEnv.print = function(...)
+    local parts = {}
+    for _, v in ipairs({...}) do
+        table.insert(parts, tostring(v))
+    end
+    table.insert(_captured, table.concat(parts, "\\t"))
+end
+MockEnv.warn = MockEnv.print
+MockEnv.error = MockEnv.print
+MockEnv.require = function(m)
+    table.insert(_captured, "REQUIRE: " .. tostring(m))
+    return create_dummy(tostring(m))
+end
+MockEnv.newproxy = function(b)
+    return create_dummy("newproxy")
+end
+MockEnv.setmetatable = setmetatable
+MockEnv.getmetatable = getmetatable
+MockEnv.pcall = function(f, ...)
+    local args = {...}
+    local ok, err = pcall(f, unpack(args))
+    if not ok then
+        table.insert(_captured, "PCALL_ERROR: " .. tostring(err))
+        return false, tostring(err)
+    end
+    return ok, err
+end
+MockEnv.xpcall = xpcall
+MockEnv.select = select
+MockEnv.unpack = unpack
+MockEnv.tostring = tostring
+MockEnv.tonumber = tonumber
+MockEnv.type = type
+MockEnv.rawset = rawset
+MockEnv.rawget = rawget
+MockEnv.next = next
+MockEnv.pairs = pairs
+MockEnv.ipairs = ipairs
+MockEnv.string = string
+MockEnv.table = table
+MockEnv.math = math
+MockEnv.os = os
+MockEnv.coroutine = coroutine
 
-return MockEnv, _captured
+-- Expõe pra ser acessível
+_G.MockEnv = MockEnv
+_G._captured = _captured
+_G.game = game_mock
+_G.workspace = workspace_mock
+_G.shared = MockEnv
+_G.getfenv = function() return MockEnv end
+_G.getgenv = function() return MockEnv end
+_G.loadstring = MockEnv.loadstring
+_G.load = MockEnv.load
+_G.task = MockEnv.task
+_G.wait = MockEnv.wait
+_G.spawn = MockEnv.spawn
+_G.Delay = MockEnv.Delay
+_G.require = MockEnv.require
+_G.newproxy = MockEnv.newproxy
+
+print("MOCK_ENV_READY")
 """
 
 # ============================================================
-# EXTRAI CONSTANTES DA TABELA DE STRINGS
+# EXTRAI CONSTANTES DA TABELA DE STRINGS (estático)
 # ============================================================
-def extract_constants(code, var_name):
-    pattern = rf'\blocal\s+{re.escape(var_name)}\s*=\s*\{{'
-    match = re.search(pattern, code)
+def extract_constants_static(code):
+    """Extrai a tabela de strings e decodifica os bytes"""
+    # Encontra a tabela
+    match = re.search(r'local\s+(\w+)\s*=\s*\{', code)
     if not match:
         return None
     
+    var_name = match.group(1)
     start = match.start()
     brace_idx = code.find('{', start)
-    if brace_idx == -1:
-        return None
     
     # Encontra o fim da tabela
     depth = 0
@@ -124,147 +245,165 @@ def extract_constants(code, var_name):
         elif c == '}':
             depth -= 1
             if depth == 0:
-                table_content = code[brace_idx:idx+1]
-                return table_content
+                table_str = code[brace_idx+1:idx]
+                # Decodifica as strings com bytes escapados
+                decoded = decode_byte_strings(table_str)
+                return decoded
         idx += 1
     return None
 
-# ============================================================
-# DEOBFUSCA UM SCRIPT
-# ============================================================
-def deobfuscate_script(script):
-    # Encontra a variável da tabela de strings
-    match = re.search(r'local\s+([a-zA-Z0-9_]+)=\{"', script)
-    if not match:
-        return {"error": "Não encontrei a tabela de strings (formato WRD esperado)"}
+def decode_byte_strings(table_str):
+    """Decodifica strings com \\xxx\\xxx\\xxx"""
+    strings = []
+    pattern = r'"((?:\\\d{3})+)"'
+    for match in re.finditer(pattern, table_str):
+        byte_str = match.group(1)
+        bytes_list = re.findall(r'\\(\d{3})', byte_str)
+        decoded = ''.join(chr(int(b)) for b in bytes_list)
+        # Filtra lixo
+        printable = sum(1 for c in decoded if 32 <= ord(c) <= 126 or ord(c) > 160)
+        if printable > len(decoded) * 0.3:
+            strings.append(decoded)
     
-    var_name = match.group(1)
+    if not strings:
+        return None
     
-    # Extrai a tabela de constantes
-    constants = extract_constants(script, var_name)
-    
-    # Encontra o ponto de injeção
-    idx_ret = script.rfind("return(function")
-    if idx_ret == -1:
-        idx_ret = script.rfind("return (function")
-    if idx_ret == -1:
-        return {"error": "Formato não reconhecido — não é WRD ou está muito ofuscado"}
-    
-    # Constrói o script com mock env
-    before = script[:idx_ret]
-    after = script[idx_ret:]
-    
-    # Substitui getfenv pelo MockEnv
-    after = re.sub(r'getfenv\s*\(\s*\)\s*or\s*_ENV', 'MockEnv', after)
-    after = re.sub(r'getfenv\s+and\s+getfenv\(\)or\s+_ENV', 'MockEnv', after)
-    
-    full_script = MOCK_ENV + "\n" + before + "\n" + after + "\n"
-    full_script += f"""
-local result = ""
-for _, v in ipairs(_captured) do
-    result = result .. v .. "\\n"
-end
-print("===CAPTURED_START===")
-print(result)
-print("===CAPTURED_END===")
-"""
-    
-    # Salva em arquivo temporário
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.lua', delete=False, encoding='utf-8') as f:
-        f.write(full_script)
-        temp_path = f.name
-    
-    try:
-        # Executa com Lua 5.1
-        result = subprocess.run(
-            [LUA_BIN, temp_path],
-            capture_output=True,
-            text=True,
-            timeout=25
-        )
-        
-        stdout = result.stdout
-        stderr = result.stderr
-        
-        # Extrai o captured
-        trace = ""
-        if "===CAPTURED_START===" in stdout:
-            trace = stdout.split("===CAPTURED_START===")[1].split("===CAPTURED_END===")[0].strip()
-        
-        # Decodifica constantes
-        const_str = ""
-        if constants:
-            # Tenta executar as constantes em Lua pra decodificar
-            const_script = f"""
-{constants}
-local out = "local Constants = {{\\n"
-for i, v in ipairs({var_name}) do
-    if type(v) == "string" then
-        local escaped = '"' .. v:gsub('\\\\', '\\\\\\\\'):gsub('"', '\\\\"'):gsub('\\n', '\\\\n') .. '"'
-        out = out .. "  [" .. i .. "] = " .. escaped .. ",\\n"
-    end
-end
-out = out .. "}"
-print(out)
-"""
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.lua', delete=False, encoding='utf-8') as f:
-                f.write(const_script)
-                const_path = f.name
-            
-            try:
-                const_result = subprocess.run(
-                    [LUA_BIN, const_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                if const_result.stdout.strip():
-                    const_str = const_result.stdout.strip()
-            except:
-                pass
-            finally:
-                if os.path.exists(const_path):
-                    os.remove(const_path)
-        
-        return {
-            "success": True,
-            "constants": const_str,
-            "trace": trace[:50000],  # Limita tamanho
-            "deobfuscated": "",
-            "stderr": stderr[:5000] if stderr else ""
-        }
-        
-    except subprocess.TimeoutExpired:
-        return {"error": "Timeout (25s) — script muito pesado ou loop infinito"}
-    except Exception as e:
-        return {"error": str(e)}
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+    result = "local Constants = {\n"
+    for i, s in enumerate(strings):
+        escaped = s.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+        result += f'  [{i+1}] = "{escaped}",\n'
+    result += "}"
+    return result
 
 # ============================================================
-# ROTAS FLASK
+# EXECUTA O SCRIPT COM LUPA (Lua 5.1 real)
+# ============================================================
+def execute_with_lupa(script):
+    """Executa o script WRD com ambiente fake usando lupa"""
+    if not USING_LUPA:
+        return None, "lupa não instalado"
+    
+    try:
+        # Configura o ambiente
+        lua.execute(MOCK_ENV_SETUP)
+        
+        # Encontra a variável da tabela
+        match = re.search(r'local\s+(\w+)\s*=\s*\{', script)
+        if not match:
+            return None, "Tabela de strings não encontrada"
+        
+        # Encontra ponto de injeção
+        idx_ret = script.rfind("return(function")
+        if idx_ret == -1:
+            idx_ret = script.rfind("return (function")
+        if idx_ret == -1:
+            return None, "Formato não reconhecido"
+        
+        # Substitui getfenv pelo MockEnv
+        before = script[:idx_ret]
+        after = script[idx_ret:]
+        after = re.sub(r'getfenv\s*\(\s*\)\s*or\s*_ENV', 'MockEnv', after)
+        after = re.sub(r'getfenv\s+and\s+getfenv\(\)or\s+_ENV', 'MockEnv', after)
+        after = re.sub(r'getfenv\s*\(\s*\)', 'MockEnv', after)
+        
+        full_script = before + "\n" + after
+        
+        # Executa com proteção
+        wrapped = f"""
+local ok, err = pcall(function()
+    {full_script}
+end)
+if not ok then
+    table.insert(_captured, "EXEC_ERROR: " .. tostring(err))
+end
+"""
+        lua.execute(wrapped)
+        
+        # Coleta o captured
+        captured = lua.eval('_captured')
+        if captured:
+            return '\n'.join(str(v) for v in captured.values()), None
+        return "", None
+        
+    except Exception as e:
+        return None, str(e)
+
+# ============================================================
+# FUNÇÃO PRINCIPAL DE DEOBFUSCAÇÃO
+# ============================================================
+def deobfuscate_script(script):
+    result = {
+        "success": True,
+        "constants": "",
+        "trace": "",
+        "deobfuscated": "",
+        "error": None
+    }
+    
+    # 1. Extrai constantes (estático - sempre funciona)
+    constants = extract_constants_static(script)
+    if constants:
+        result["constants"] = constants
+    
+    # 2. Executa com lupa (dinâmico)
+    if USING_LUPA:
+        trace, err = execute_with_lupa(script)
+        if err:
+            result["error"] = err
+            result["success"] = False
+        if trace:
+            result["trace"] = trace[:50000]
+    else:
+        result["error"] = "Backend sem Lua (lupa não instalado)"
+        result["success"] = False
+    
+    # 3. Tenta reconstruir código limpo a partir do trace
+    if result["trace"] and "LS_CONTENT_START" in result["trace"]:
+        # Extrai conteúdo de loadstring
+        parts = result["trace"].split("LS_CONTENT_START")
+        if len(parts) > 1:
+            content = parts[1].split("LS_CONTENT_END")[0].strip()
+            if len(content) > 50:
+                # Tenta decodificar escapes
+                try:
+                    decoded = content.encode('utf-8').decode('unicode_escape')
+                    result["deobfuscated"] = decoded
+                except:
+                    result["deobfuscated"] = content
+    
+    return result
+
+# ============================================================
+# ROTAS
 # ============================================================
 @app.route('/')
 def home():
-    return jsonify({"status": "WRD Deobfuscator API", "version": "2.0", "endpoints": ["POST /deobfuscate"]})
+    return jsonify({
+        "status": "online",
+        "engine": "lupa" if USING_LUPA else "none",
+        "endpoints": ["POST /deobfuscate", "GET /health"]
+    })
 
 @app.route('/deobfuscate', methods=['POST'])
 def deobfuscate():
     data = request.get_json()
     if not data or 'script' not in data:
-        return jsonify({"error": "Envie um JSON com 'script'"}), 400
+        return jsonify({"error": "Envie JSON com campo 'script'"}), 400
     
     script = data['script']
     if len(script) > 500000:
-        return jsonify({"error": "Script muito grande (max 500KB)"}), 400
+        return jsonify({"error": "Script muito grande (máx 500KB)"}), 400
     
-    result = deobfuscate_script(script)
-    return jsonify(result)
+    try:
+        result = deobfuscate_script(script)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e), "success": False}), 500
 
 @app.route('/health')
 def health():
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok", "engine": "lupa" if USING_LUPA else "none"})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
