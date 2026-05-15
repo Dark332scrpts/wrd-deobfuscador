@@ -1,11 +1,9 @@
 services:
   - type: web
-    name: wrd-deobfuscator-backend
+    name: wrd-deobfuscador
     env: python
-    buildCommand: |
-      chmod +x lua5.1
-      pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:10000 --timeout 60
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:10000 --timeout 60 --workers 1
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
