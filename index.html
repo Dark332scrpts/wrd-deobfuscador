@@ -3,156 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WRD Deobfuscator - WeAreDevs</title>
+    <title>WRD Deobfuscator — WeAreDevs</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{
-            background:#0a0a0a;
-            color:#ccc;
-            font-family:'Courier New',monospace;
-            min-height:100vh;
-            display:flex;
-            flex-direction:column;
-        }
-        header{
-            background:#111;
-            border-bottom:2px solid #ff4400;
-            padding:12px 15px;
-            text-align:center;
-        }
-        header h1{color:#ff4400;font-size:20px;letter-spacing:2px;}
-        header span{color:#555;font-size:10px;}
-        .container{
-            display:flex;
-            flex:1;
-            gap:8px;
-            padding:8px;
-            height:calc(100vh - 60px);
-        }
-        .panel{
-            flex:1;
-            display:flex;
-            flex-direction:column;
-            background:#111;
-            border:1px solid #222;
-            border-radius:4px;
-            overflow:hidden;
-        }
-        .panel-header{
-            background:#1a1a1a;
-            padding:8px 12px;
-            font-size:12px;
-            font-weight:bold;
-            border-bottom:1px solid #222;
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-        }
-        .panel-header.red{color:#ff4400;}
-        .panel-header.green{color:#44ff44;}
-        textarea{
-            flex:1;
-            background:#0a0a0a;
-            color:#ccc;
-            border:none;
-            padding:12px;
-            font-family:'Courier New',monospace;
-            font-size:11px;
-            resize:none;
-            outline:none;
-            line-height:1.5;
-        }
-        textarea::placeholder{color:#333;}
-        .btn-row{
-            display:flex;
-            gap:4px;
-            padding:6px;
-            background:#1a1a1a;
-            border-top:1px solid #222;
-        }
-        button{
-            flex:1;
-            padding:10px;
-            border:1px solid #333;
-            background:#1a1a1a;
-            color:#ccc;
-            cursor:pointer;
-            font-family:'Courier New',monospace;
-            font-size:10px;
-            font-weight:bold;
-            letter-spacing:1px;
-            transition:all 0.2s;
-            border-radius:3px;
-        }
-        button:hover{background:#222;border-color:#555;}
-        button.primary{
-            background:#2a0a00;
-            border-color:#ff4400;
-            color:#ff4400;
-        }
-        button.primary:hover{background:#3a1500;box-shadow:0 0 15px #ff440040;}
-        button.green{background:#002a00;border-color:#44ff44;color:#44ff44;}
-        button.green:hover{background:#003a00;}
-        .log{
-            position:fixed;
-            bottom:10px;
-            right:10px;
-            background:#000c;
-            color:#ffaa00;
-            padding:6px 12px;
-            border-radius:3px;
-            font-size:10px;
-            border:1px solid #ffaa0044;
-            display:none;
-            z-index:99;
-        }
-        .loading{
-            display:none;
-            text-align:center;
-            padding:20px;
-            color:#ffaa00;
-        }
-        .loading.active{display:block;}
-        .spinner{
-            display:inline-block;
-            width:20px;
-            height:20px;
-            border:2px solid #ffaa0044;
-            border-top:2px solid #ffaa00;
-            border-radius:50%;
-            animation:spin 1s linear infinite;
-        }
+        body{background:#0a0a0a;color:#ccc;font-family:'Courier New',monospace;min-height:100vh;display:flex;flex-direction:column}
+        header{background:#111;border-bottom:2px solid #ff4400;padding:12px;text-align:center}
+        header h1{color:#ff4400;font-size:18px;letter-spacing:2px}
+        header span{color:#555;font-size:10px}
+        .container{display:flex;flex:1;gap:8px;padding:8px;height:calc(100vh - 55px)}
+        .panel{flex:1;display:flex;flex-direction:column;background:#111;border:1px solid #222;border-radius:4px;overflow:hidden}
+        .panel-header{background:#1a1a1a;padding:8px 12px;font-size:11px;font-weight:bold;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center}
+        .panel-header.red{color:#ff4400}
+        .panel-header.green{color:#44ff44}
+        textarea{flex:1;background:#0a0a0a;color:#ccc;border:none;padding:10px;font-family:'Courier New',monospace;font-size:10px;resize:none;outline:none;line-height:1.4}
+        textarea::placeholder{color:#333}
+        .btn-row{display:flex;gap:4px;padding:6px;background:#1a1a1a;border-top:1px solid #222}
+        button{flex:1;padding:10px 6px;border:1px solid #333;background:#1a1a1a;color:#ccc;cursor:pointer;font-family:'Courier New',monospace;font-size:9px;font-weight:bold;letter-spacing:0.5px;transition:all 0.2s;border-radius:3px;white-space:nowrap}
+        button:hover{background:#222;border-color:#555}
+        button.primary{background:#2a0a00;border-color:#ff4400;color:#ff4400}
+        button.primary:hover{background:#3a1500}
+        button.primary:disabled{opacity:0.4;cursor:not-allowed}
+        button.green{background:#002a00;border-color:#44ff44;color:#44ff44}
+        .log{position:fixed;bottom:10px;right:10px;background:#000c;color:#ffaa00;padding:5px 10px;border-radius:3px;font-size:10px;border:1px solid #ffaa0044;display:none;z-index:99}
+        .spinner{display:inline-block;width:14px;height:14px;border:2px solid #ffaa0044;border-top:2px solid #ffaa00;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:6px}
         @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-        @media(max-width:768px){
-            .container{flex-direction:column;}
-            textarea{min-height:200px;}
-        }
+        #status{font-size:10px;transition:color 0.3s}
+        #status.done{color:#44ff44}
+        #status.error{color:#ff4444}
+        #status.running{color:#ffaa00}
+        @media(max-width:768px){.container{flex-direction:column}textarea{min-height:180px}}
     </style>
 </head>
 <body>
 
 <header>
     <h1>🔓 WRD DEOBFUSCATOR</h1>
-    <span>WeAreDevs / Prometheus — Lua via Fengari (WASM) — 100% Navegador</span>
+    <span>WeAreDevs / Prometheus — Lua 5.1 real no backend — Resultado limpo</span>
 </header>
 
 <div class="container">
     <div class="panel">
         <div class="panel-header red">
             <span>🔒 SCRIPT OFUSCADO</span>
-            <span style="font-size:10px;color:#ff4400">WRD / WeAreDevs</span>
+            <span style="font-size:9px;color:#ff4400">cole aqui</span>
         </div>
         <textarea id="input" placeholder="Cole o script ofuscado do WeAreDevs aqui...
-        
-Formatos suportados:
-- WRD com tabela de bytes (\xxx\xxx)
-- WRD com loadstring(game:HttpGet('...'))
-- WRD com Base64
-- Prometheus Obfuscator
-- Qualquer versão WRD"></textarea>
+
+Suporta:
+✓ WRD com tabela de bytes (\xxx)
+✓ loadstring(game:HttpGet('...'))
+✓ Base64
+✓ Prometheus / vBeLua
+✓ Todas as versões WRD"></textarea>
         <div class="btn-row">
-            <button class="primary" onclick="deobfuscate()">▶ DEOBFUSCAR (LUA REAL)</button>
-            <button onclick="extractStrings()">📋 EXTRAIR STRINGS</button>
+            <button class="primary" id="btnDeobf" onclick="deobfuscate()">▶ DEOBFUSCAR</button>
+            <button onclick="extractQuick()">📋 STRINGS</button>
             <button onclick="clearAll()">✕ LIMPAR</button>
         </div>
     </div>
@@ -160,303 +65,176 @@ Formatos suportados:
     <div class="panel">
         <div class="panel-header green">
             <span>✅ RESULTADO</span>
-            <span style="font-size:10px;color:#44ff44" id="status">pronto</span>
-        </div>
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <div style="margin-top:10px;">Executando script em ambiente controlado...</div>
-            <div style="font-size:10px;color:#666;margin-top:5px;">Isso pode levar alguns segundos</div>
+            <span id="status">pronto</span>
         </div>
         <textarea id="output" placeholder="Resultado desofuscado aparece aqui..." readonly></textarea>
         <div class="btn-row">
             <button onclick="copyOutput()">📋 COPIAR</button>
-            <button onclick="downloadOutput()">💾 BAIXAR .LUA</button>
+            <button onclick="downloadOutput()">💾 BAIXAR</button>
             <button onclick="beautifyOutput()">✨ FORMATAR</button>
         </div>
     </div>
 </div>
 
-<div class="log" id="log">⚙️ Processando...</div>
-
-<!-- Fengari - Lua 5.3 em WebAssembly -->
-<script src="fengari-web.js"></script>
+<div class="log" id="log"></div>
 
 <script>
 // ============================================================
-// CONFIGURAÇÃO DO FENGARI
+// CONFIGURAÇÃO — Altere esta URL quando criar o backend
 // ============================================================
-let fengariReady = false;
-
-// Inicializa o Fengari quando carregar
-window.onload = function() {
-    if (typeof fengari !== 'undefined') {
-        fengariReady = true;
-        console.log('%c🔧 Fengari (Lua WASM) carregado com sucesso!',
-            'color:#44ff44;font-size:14px;');
-    } else {
-        console.warn('Fengari não carregou. Usando fallback estático.');
-    }
-};
+const BACKEND_URL = 'https://SEU-APP.onrender.com'; // ← ALTERE AQUI DEPOIS
 
 // ============================================================
-// FUNÇÃO PRINCIPAL DE DEOBFUSCAÇÃO
+// DEOBFUSCAÇÃO PRINCIPAL (envia pro backend)
 // ============================================================
 async function deobfuscate() {
     const input = document.getElementById('input').value.trim();
-    if (!input) { alert('Cola o script WRD primeiro.'); return; }
+    if (!input) { alert('Cola o script primeiro.'); return; }
     
-    // Mostra loading
-    document.getElementById('loading').classList.add('active');
-    document.getElementById('output').value = '';
-    showLog('⚙️ Executando em ambiente Lua real...');
+    const btn = document.getElementById('btnDeobf');
+    const status = document.getElementById('status');
+    const output = document.getElementById('output');
     
-    let result = [];
+    btn.disabled = true;
+    btn.textContent = '⏳ PROCESSANDO...';
+    status.textContent = 'executando Lua 5.1...';
+    status.className = 'running';
+    output.value = '';
+    showLog('⚙️ Enviando para backend...');
     
     try {
-        // PASSO 1: Extrair strings decodificadas (rápido)
-        const strings = extractByteStrings(input);
-        if (strings.length > 0) {
-            result.push('-- ============================================');
-            result.push('-- STRINGS DECODIFICADAS (' + strings.length + ' encontradas)');
-            result.push('-- ============================================');
-            strings.forEach((s, i) => {
-                result.push(`local str_${i+1} = "${escapeLua(s)}"`);
-            });
-            result.push('');
-        }
+        const response = await fetch(`${BACKEND_URL}/deobfuscate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ script: input })
+        });
         
-        // PASSO 2: Tentar executar com Fengari (Lua real)
-        if (fengariReady) {
-            const luaResult = await executeWithFengari(input);
-            if (luaResult) {
-                result.push('-- ============================================');
-                result.push('-- RESULTADO DA EXECUÇÃO CONTROLADA');
-                result.push('-- ============================================');
-                result.push(luaResult);
-            }
+        const data = await response.json();
+        
+        if (data.error) {
+            output.value = `-- ERRO NO BACKEND:\n-- ${data.error}\n\n-- Trace parcial:\n${data.trace || ''}`;
+            status.textContent = 'erro';
+            status.className = 'error';
         } else {
-            result.push('-- AVISO: Fengari não carregou. Use o PC para');
-            result.push('-- execução Lua completa. Strings extraídas acima.');
+            let result = '';
+            
+            if (data.constants) {
+                result += '-- ============================================\n';
+                result += '-- CONSTANTES DECODIFICADAS\n';
+                result += '-- ============================================\n';
+                result += data.constants + '\n\n';
+            }
+            
+            if (data.trace) {
+                result += '-- ============================================\n';
+                result += '-- TRACE DE EXECUÇÃO\n';
+                result += '-- ============================================\n';
+                result += data.trace + '\n\n';
+            }
+            
+            if (data.deobfuscated) {
+                result += '-- ============================================\n';
+                result += '-- CÓDIGO LIMPO (RECONSTRUÍDO)\n';
+                result += '-- ============================================\n';
+                result += data.deobfuscated;
+            }
+            
+            output.value = result || '-- Script processado, mas sem output significativo.';
+            status.textContent = 'concluído ✓';
+            status.className = 'done';
+            showLog('✅ Deobfuscado com sucesso!');
         }
-        
-        // PASSO 3: Extrair URLs e metadados
-        const urls = extractURLs(input);
-        if (urls.length > 0) {
-            result.push('');
-            result.push('-- ============================================');
-            result.push('-- URLs ENCONTRADAS');
-            result.push('-- ============================================');
-            urls.forEach(url => result.push('-- ' + url));
-        }
-        
-        document.getElementById('output').value = result.join('\n');
-        document.getElementById('status').textContent = 
-            `${strings.length} strings | ${fengariReady ? 'Lua executado' : 'modo estático'}`;
-        
     } catch (e) {
-        document.getElementById('output').value = 
-            `-- ERRO: ${e.message}\n-- Stack: ${e.stack}\n\n` +
-            `-- Strings extraídas até o erro:\n${result.join('\n')}`;
-        document.getElementById('status').textContent = 'erro';
+        output.value = `-- ERRO DE CONEXÃO:\n-- ${e.message}\n-- \n-- Verifique se o backend está rodando em:\n-- ${BACKEND_URL}`;
+        status.textContent = 'sem conexão';
+        status.className = 'error';
     }
     
-    document.getElementById('loading').classList.remove('active');
-    hideLog();
+    btn.disabled = false;
+    btn.textContent = '▶ DEOBFUSCAR';
+    setTimeout(() => hideLog(), 2000);
 }
 
 // ============================================================
-// EXECUÇÃO COM FENGARI (LUA REAL NO NAVEGADOR)
+// EXTRAÇÃO RÁPIDA DE STRINGS (modo offline)
 // ============================================================
-async function executeWithFengari(script) {
-    return new Promise((resolve) => {
-        try {
-            const output = [];
-            
-            // Cria ambiente fake que espiona tudo
-            const fakeEnv = `
--- Ambiente falso para capturar tudo
-local _captured = {}
-local _string_count = 0
-
--- Sobrescreve print para capturar
-local _real_print = print
-print = function(...)
-    local args = {...}
-    local parts = {}
-    for i, v in ipairs(args) do
-        table.insert(parts, tostring(v))
-    end
-    local msg = table.concat(parts, "\\t")
-    table.insert(_captured, msg)
-end
-
--- Spy de loadstring
-local _real_loadstring = loadstring or load
-loadstring = function(s, chunkname)
-    table.insert(_captured, "LOADSTRING: " .. tostring(#s) .. " bytes")
-    if type(s) == "string" and #s > 20 then
-        table.insert(_captured, "CONTENT: " .. string.sub(s, 1, 500))
-    end
-    return _real_loadstring(s, chunkname)
-end
-load = loadstring
-
--- Spy de HttpGet
-if game and game.HttpGet then
-    local _real_httpget = game.HttpGet
-    game.HttpGet = function(self, url)
-        table.insert(_captured, "URL: " .. tostring(url))
-        return _real_httpget(self, url)
-    end
-end
-
--- Executa o script em modo protegido
-local success, err = pcall(function()
-    ${script.replace(/\\/g, '\\\\').replace(/`/g, '\\`')}
-end)
-
-if not success then
-    table.insert(_captured, "ERRO: " .. tostring(err))
-end
-
-return table.concat(_captured, "\\n")
-`;
-            
-            // Executa com Fengari
-            const result = fengari.load(fakeEnv)();
-            resolve(result || "Script executado sem output.");
-            
-        } catch (e) {
-            resolve("Erro na execução Fengari: " + e.message);
-        }
-    });
-}
-
-// ============================================================
-// EXTRAÇÃO DE STRINGS (BYTES ESCAPADOS)
-// ============================================================
-function extractByteStrings(code) {
-    const strings = [];
-    
-    // Padrão: "\xxx\xxx\xxx"
-    const pattern = /"((?:\\\d{3})+)"|'((?:\\\d{3})+)'/g;
-    let match;
-    
-    while ((match = pattern.exec(code)) !== null) {
-        const byteStr = match[1] || match[2];
-        if (byteStr && byteStr.length > 6) {
-            try {
-                const decoded = decodeBytes(byteStr);
-                if (decoded && decoded.length > 0 && !isGarbage(decoded)) {
-                    strings.push(decoded);
-                }
-            } catch (e) {}
-        }
-    }
-    
-    // Remove duplicatas mantendo ordem
-    return [...new Set(strings)];
-}
-
-function decodeBytes(byteStr) {
-    const bytes = byteStr.match(/\\\d{3}/g);
-    if (!bytes) return '';
-    
-    let result = '';
-    for (const byte of bytes) {
-        const num = parseInt(byte.substring(1), 10);
-        result += String.fromCharCode(num);
-    }
-    return result;
-}
-
-function isGarbage(str) {
-    const printable = str.replace(/[\x20-\x7E\u00C0-\u00FF]/g, '');
-    return printable.length > str.length * 0.6;
-}
-
-// ============================================================
-// EXTRAÇÃO RÁPIDA DE STRINGS
-// ============================================================
-function extractStrings() {
+function extractQuick() {
     const input = document.getElementById('input').value.trim();
     if (!input) { alert('Precisa de código.'); return; }
     
-    const strings = extractByteStrings(input);
+    showLog('📋 Extraindo strings...');
     let result = [];
     
-    result.push('-- STRINGS DECODIFICADAS: ' + strings.length);
+    // Extrai strings com bytes escapados
+    const bytePattern = /"((?:\\\d{3})+)"|'((?:\\\d{3})+)'/g;
+    const strings = [];
+    let match;
+    
+    while ((match = bytePattern.exec(input)) !== null) {
+        const byteStr = match[1] || match[2];
+        if (byteStr && byteStr.length > 4) {
+            const bytes = byteStr.match(/\\\d{3}/g);
+            if (bytes) {
+                let decoded = '';
+                for (const b of bytes) {
+                    decoded += String.fromCharCode(parseInt(b.substring(1), 10));
+                }
+                if (decoded.length > 0 && !/^[\x00-\x1F\x80-\x9F]+$/.test(decoded)) {
+                    strings.push(decoded);
+                }
+            }
+        }
+    }
+    
+    // Remove duplicatas
+    const unique = [...new Set(strings)];
+    
+    result.push(`-- STRINGS DECODIFICADAS: ${unique.length}`);
     result.push('-- ========================');
-    strings.forEach((s, i) => {
-        result.push(`[${i+1}] ${s}`);
+    unique.forEach((s, i) => {
+        const escaped = s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+        result.push(`[${i+1}] "${escaped}"`);
     });
     
-    // Também tenta Base64
+    // Tenta decodificar Base64
     const b64Pattern = /["']([A-Za-z0-9+/=]{40,})["']/g;
-    let b64Match;
     let b64Count = 0;
-    while ((b64Match = b64Pattern.exec(input)) !== null) {
+    while ((match = b64Pattern.exec(input)) !== null) {
         try {
-            const decoded = atob(b64Match[1]);
-            if (decoded.includes('local') || decoded.includes('function')) {
-                result.push(`\n-- BASE64 DECODIFICADO:`);
-                result.push(decoded.substring(0, 1000));
-                b64Count++;
+            const decoded = atob(match[1]);
+            if (decoded.includes('local') || decoded.includes('function') || decoded.includes('http')) {
+                result.push(`\n-- BASE64 DECODIFICADO [${++b64Count}]:`);
+                result.push(decoded.substring(0, 2000));
             }
-        } catch (e) {}
+        } catch(e) {}
+    }
+    
+    // URLs
+    const urls = input.match(/https?:\/\/[^\s"')\]]+/g) || [];
+    if (urls.length > 0) {
+        result.push('\n-- URLs ENCONTRADAS:');
+        [...new Set(urls)].forEach(url => result.push('-- ' + url));
     }
     
     document.getElementById('output').value = result.join('\n');
-    document.getElementById('status').textContent = 
-        `${strings.length} strings | ${b64Count} base64`;
-}
-
-// ============================================================
-// EXTRAÇÃO DE URLs
-// ============================================================
-function extractURLs(code) {
-    const urls = [];
-    const pattern = /https?:\/\/[^\s"')\]]+/g;
-    let match;
-    while ((match = pattern.exec(code)) !== null) {
-        urls.push(match[0]);
-    }
-    return [...new Set(urls)];
+    document.getElementById('status').textContent = `${unique.length} strings`;
+    document.getElementById('status').className = 'done';
+    hideLog();
 }
 
 // ============================================================
 // UTILITÁRIOS
 // ============================================================
-function escapeLua(str) {
-    return str.replace(/\\/g, '\\\\')
-              .replace(/"/g, '\\"')
-              .replace(/\n/g, '\\n')
-              .replace(/\r/g, '\\r')
-              .replace(/\t/g, '\\t');
-}
-
 function beautifyOutput() {
     const code = document.getElementById('output').value;
     let indent = 0;
-    const lines = code.split('\n');
-    const result = lines.map(line => {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('end') || trimmed.startsWith('}') || 
-            trimmed.startsWith(')') || trimmed.startsWith('until')) {
-            indent = Math.max(0, indent - 1);
-        }
-        const indented = '    '.repeat(indent) + trimmed;
-        if (trimmed.match(/\b(function|if|for|while|do|repeat)\b/) && 
-            !trimmed.includes('end')) {
-            indent++;
-        }
-        if (trimmed.startsWith('else') || trimmed.startsWith('elseif')) {
-            indent = Math.max(0, indent - 1);
-            const r = '    '.repeat(indent) + trimmed;
-            indent++;
-            return r;
-        }
-        return indented;
+    const result = code.split('\n').map(line => {
+        const t = line.trim();
+        if (/^(end|until|else|elseif)\b/.test(t)) indent = Math.max(0, indent - 1);
+        const r = '    '.repeat(indent) + t;
+        if (/\b(function|if|for|while|do|repeat)\b/.test(t) && !t.includes('end')) indent++;
+        if (/^else\b/.test(t)) indent++;
+        return r;
     });
     document.getElementById('output').value = result.join('\n');
 }
@@ -465,44 +243,38 @@ function clearAll() {
     document.getElementById('input').value = '';
     document.getElementById('output').value = '';
     document.getElementById('status').textContent = 'pronto';
+    document.getElementById('status').className = '';
 }
 
 function copyOutput() {
-    const output = document.getElementById('output');
-    output.select();
+    const o = document.getElementById('output');
+    o.select();
     document.execCommand('copy');
     document.getElementById('status').textContent = 'copiado!';
-    setTimeout(() => { document.getElementById('status').textContent = 'pronto'; }, 1500);
 }
 
 function downloadOutput() {
-    const output = document.getElementById('output').value;
-    const blob = new Blob([output], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
+    const blob = new Blob([document.getElementById('output').value], {type:'text/plain'});
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `wrd_deobfuscated_${Date.now()}.lua`;
+    a.href = URL.createObjectURL(blob);
+    a.download = `wrd_clean_${Date.now()}.lua`;
     a.click();
-    URL.revokeObjectURL(url);
 }
 
-function showLog(msg) {
-    const log = document.getElementById('log');
-    log.textContent = msg;
-    log.style.display = 'block';
+function showLog(m) {
+    const l = document.getElementById('log');
+    l.textContent = m;
+    l.style.display = 'block';
 }
-
 function hideLog() {
-    setTimeout(() => { document.getElementById('log').style.display = 'none'; }, 1500);
+    document.getElementById('log').style.display = 'none';
 }
 
-// CTRL+Enter = executar
-document.getElementById('input').addEventListener('keydown', function(e) {
-    if (e.ctrlKey && e.key === 'Enter') {
-        deobfuscate();
-    }
+// CTRL+Enter
+document.getElementById('input').addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'Enter') deobfuscate();
 });
 </script>
 
 </body>
-          </html>
+</html>
